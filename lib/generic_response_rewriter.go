@@ -6,12 +6,12 @@ import (
 	"regexp"
 )
 
-type genericResponseRewriter struct {
+type GenericResponseRewriter struct {
 	mappings      []Mapping
 	rewriteRoutes []*regexp.Regexp
 }
 
-func (r *genericResponseRewriter) Matches(request *http.Request, response *http.Response) bool {
+func (r *GenericResponseRewriter) Matches(request *http.Request, response *http.Response) bool {
 	for _, route := range r.rewriteRoutes {
 		if route.MatchString(request.RequestURI) {
 			return true
@@ -21,7 +21,7 @@ func (r *genericResponseRewriter) Matches(request *http.Request, response *http.
 	return false
 }
 
-func (r *genericResponseRewriter) RewriteResponse(response []byte) []byte {
+func (r *GenericResponseRewriter) RewriteResponse(response []byte) []byte {
 	for _, mapping := range r.mappings {
 		if bytes.Contains(response, []byte(mapping.remote)) {
 			response = bytes.Replace(
@@ -32,8 +32,8 @@ func (r *genericResponseRewriter) RewriteResponse(response []byte) []byte {
 	return response
 }
 
-func newGenericResponseRewriter(mappings []Mapping, rewriteRoutes []*regexp.Regexp) *genericResponseRewriter {
-	return &genericResponseRewriter{
+func NewGenericResponseRewriter(mappings []Mapping, rewriteRoutes []*regexp.Regexp) *GenericResponseRewriter {
+	return &GenericResponseRewriter{
 		mappings:      mappings,
 		rewriteRoutes: rewriteRoutes,
 	}

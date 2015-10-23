@@ -5,11 +5,11 @@ import (
 	"strings"
 )
 
-type locationRewriter struct {
+type LocationRewriter struct {
 	mappings []Mapping
 }
 
-func (l *locationRewriter) RewriteHeaders(headers http.Header) {
+func (l *LocationRewriter) RewriteHeaders(headers http.Header) {
 	if location := headers.Get("location"); location != "" {
 		for _, mapping := range l.mappings {
 			if strings.Contains(location, mapping.remote) {
@@ -22,8 +22,8 @@ func (l *locationRewriter) RewriteHeaders(headers http.Header) {
 	}
 }
 
-func newLocationRewriter(mappings []Mapping) *locationRewriter {
-	return &locationRewriter{
+func NewLocationRewriter(mappings []Mapping) *LocationRewriter {
+	return &LocationRewriter{
 		mappings: mappings,
 	}
 }
