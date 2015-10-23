@@ -6,7 +6,7 @@ GO_BUILDDIR = ./build
 GO_SRCDIRS = cli lib
 GO_PACKAGE_PREFIX = github.com/mayflower/go-repro
 GO_PACKAGES = \
-	cli \
+	cli/go-repro \
 	lib
 GO_DEPENDENCIES = github.com/davecgh/go-spew/spew
 

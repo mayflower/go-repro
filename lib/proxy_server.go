@@ -48,7 +48,7 @@ func (p *proxyServer) ServeHTTP(outgoing http.ResponseWriter, incoming *http.Req
 
 	if err != nil {
 		fmt.Fprintf(p.log, "error during proxy request: %v\n", err)
-		http.Error(outgoing, err.Error(), http.StatusBadRequest)
+		http.Error(outgoing, err.Error(), http.StatusBadGateway)
 	} else {
 		p.sendProxyResponse(incoming, response, outgoing)
 	}
@@ -91,6 +91,8 @@ func (p *proxyServer) sendProxyResponse(request *http.Request, response *http.Re
 		}
 	}
 
+	outgoingHeaders.Set("content-length", "")
+
 	responseRewriters := make([]ResponseRewriter, 0, len(p.rewriters))
 
 	for _, rewriter := range p.rewriters {
@@ -105,6 +107,8 @@ func (p *proxyServer) sendProxyResponse(request *http.Request, response *http.Re
 		}
 	}
 
+	outgoing.WriteHeader(response.StatusCode)
+
 	if len(responseRewriters) > 0 {
 		bodyData, err := ioutil.ReadAll(response.Body)
 
@@ -114,13 +118,10 @@ func (p *proxyServer) sendProxyResponse(request *http.Request, response *http.Re
 			}
 		} else {
 			bodyData = make([]byte, 0)
-			outgoingHeaders.Set("content-length", "0")
 		}
 
-		outgoing.WriteHeader(response.StatusCode)
 		io.Copy(outgoing, bytes.NewBuffer(bodyData))
 	} else {
-		outgoing.WriteHeader(response.StatusCode)
 		io.Copy(outgoing, response.Body)
 	}
 }
