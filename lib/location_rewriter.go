@@ -9,11 +9,13 @@ type locationRewriter struct {
 	mappings []Mapping
 }
 
-func (l *locationRewriter) Rewrite(headers http.Header) {
+func (l *locationRewriter) RewriteHeaders(headers http.Header) {
 	if location := headers.Get("location"); location != "" {
 		for _, mapping := range l.mappings {
-			location = strings.Replace(
-				location, mapping.remote, "http://"+mapping.local, -1)
+			if strings.Contains(location, mapping.remote) {
+				location = strings.Replace(
+					location, mapping.remote, "http://"+mapping.local, -1)
+			}
 		}
 
 		headers.Set("location", location)

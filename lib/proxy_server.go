@@ -1,8 +1,10 @@
 package lib
 
 import (
+	"bytes"
 	"fmt"
 	"io"
+	"io/ioutil"
 	"net/http"
 	"net/url"
 
@@ -44,9 +46,10 @@ func (p *proxyServer) ServeHTTP(outgoing http.ResponseWriter, incoming *http.Req
 	}
 
 	if err != nil {
+		fmt.Fprintf(p.log, "error during proxy request: %v\n", err)
 		http.Error(outgoing, err.Error(), http.StatusBadRequest)
 	} else {
-		p.proxyResponse(response, outgoing)
+		p.sendProxyResponse(incoming, response, outgoing)
 	}
 }
 
@@ -70,10 +73,15 @@ func (p *proxyServer) buildProxyRequest(incoming *http.Request) (outgoing *http.
 		}
 	}
 
+	// We save compression for later
+	outgoing.Header.Set("accept-encoding", "")
+
 	return
 }
 
-func (p *proxyServer) proxyResponse(response *http.Response, outgoing http.ResponseWriter) {
+func (p *proxyServer) sendProxyResponse(request *http.Request, response *http.Response, outgoing http.ResponseWriter) {
+	defer response.Body.Close()
+
 	outgoingHeaders := outgoing.Header()
 
 	for key, values := range response.Header {
@@ -82,17 +90,38 @@ func (p *proxyServer) proxyResponse(response *http.Response, outgoing http.Respo
 		}
 	}
 
+	responseRewriters := make([]ResponseRewriter, 0, len(p.rewriters))
+
 	for _, rewriter := range p.rewriters {
+		if r, ok := rewriter.(ResponseRewriter); ok {
+			if r.Matches(request, response) {
+				responseRewriters = append(responseRewriters, r)
+			}
+		}
+
 		if r, ok := rewriter.(HeaderRewriter); ok {
-			r.Rewrite(outgoingHeaders)
+			r.RewriteHeaders(outgoingHeaders)
 		}
 	}
 
-	outgoing.WriteHeader(response.StatusCode)
+	if len(responseRewriters) > 0 {
+		bodyData, err := ioutil.ReadAll(response.Body)
 
-	io.Copy(outgoing, response.Body)
+		if err == nil {
+			for _, rewriter := range responseRewriters {
+				bodyData = rewriter.RewriteResponse(bodyData)
+			}
+		} else {
+			bodyData = make([]byte, 0)
+			outgoingHeaders.Set("content-length", "0")
+		}
 
-	response.Body.Close()
+		outgoing.WriteHeader(response.StatusCode)
+		io.Copy(outgoing, bytes.NewBuffer(bodyData))
+	} else {
+		outgoing.WriteHeader(response.StatusCode)
+		io.Copy(outgoing, response.Body)
+	}
 }
 
 func (p *proxyServer) Start() <-chan error {

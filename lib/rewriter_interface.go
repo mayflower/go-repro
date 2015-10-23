@@ -5,7 +5,12 @@ import (
 )
 
 type HeaderRewriter interface {
-	Rewrite(http.Header)
+	RewriteHeaders(headers http.Header)
+}
+
+type ResponseRewriter interface {
+	RewriteResponse(response []byte) []byte
+	Matches(*http.Request, *http.Response) bool
 }
 
 type Rewriter interface {

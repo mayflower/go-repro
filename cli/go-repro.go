@@ -11,9 +11,10 @@ import (
 )
 
 func parseCommandline() (cfg lib.Config, err error) {
-	var mappingDefs string
+	var mappingDefs, rewriteDefs string
 
 	flag.StringVar(&mappingDefs, "m", "", "mapping definitions, format: local=remote,[local=remote,...]")
+	flag.StringVar(&rewriteDefs, "r", "", "comma-separated list of regexes indetifying routes whose response will be rewritten")
 
 	flag.Usage = func() {
 		fmt.Fprint(os.Stdout, "usage: go-repro [options]\n\n")
@@ -25,6 +26,10 @@ func parseCommandline() (cfg lib.Config, err error) {
 	cfg = lib.NewConfig()
 
 	err = addMappings(mappingDefs, &cfg)
+
+	if err == nil {
+		err = addRewrites(rewriteDefs, &cfg)
+	}
 
 	return
 }
@@ -38,6 +43,18 @@ func addMappings(def string, cfg *lib.Config) (err error) {
 		} else {
 			err = cfg.AddMapping(parts[0], parts[1])
 		}
+
+		if err != nil {
+			return
+		}
+	}
+
+	return
+}
+
+func addRewrites(def string, cfg *lib.Config) (err error) {
+	for _, definition := range strings.Split(def, ",") {
+		err = cfg.AddRewriteRoute(definition)
 
 		if err != nil {
 			return
