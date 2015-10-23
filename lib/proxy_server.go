@@ -2,6 +2,7 @@ package lib
 
 import (
 	"bytes"
+	"crypto/tls"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -153,10 +154,17 @@ func newProxyServer(m Mapping, log io.Writer) (p *proxyServer, err error) {
 		Handler: p,
 	}
 
+	transport := &http.Transport{
+		TLSClientConfig: &tls.Config{
+			InsecureSkipVerify: true,
+		},
+	}
+
 	p.client = http.Client{
 		CheckRedirect: func(req *http.Request, via []*http.Request) error {
 			return redirectCaughtError{}
 		},
+		Transport: transport,
 	}
 
 	return

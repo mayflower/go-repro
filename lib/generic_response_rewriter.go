@@ -22,6 +22,8 @@ func (r *genericResponseRewriter) Matches(request *http.Request, response *http.
 }
 
 func (r *genericResponseRewriter) RewriteResponse(response []byte) []byte {
+	_ = "breakpoint"
+
 	for _, mapping := range r.mappings {
 		if bytes.Contains(response, []byte(mapping.remote)) {
 			response = bytes.Replace(
