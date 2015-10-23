@@ -12,6 +12,10 @@ type GenericResponseRewriter struct {
 }
 
 func (r *GenericResponseRewriter) Matches(request *http.Request, response *http.Response) bool {
+	if request.Header.Get("content-type") == "application/json" {
+		return false
+	}
+
 	for _, route := range r.rewriteRoutes {
 		if route.MatchString(request.RequestURI) {
 			return true

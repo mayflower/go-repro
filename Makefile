@@ -10,7 +10,7 @@ GO_PACKAGES = \
 	lib
 GO_DEPENDENCIES = github.com/davecgh/go-spew/spew
 
-GO_DEBUG_MAIN = github.com/mayflower/go-repro/cli/
+GO_DEBUG_MAIN = github.com/mayflower/go-repro/cli/go-repro
 GO_DEBUG_BINARY = ./go-repro-debug
 
 GIT = git

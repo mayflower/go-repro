@@ -92,6 +92,14 @@ func (p *proxyServer) sendProxyResponse(request *http.Request, response *http.Re
 	}
 
 	outgoingHeaders.Del("content-length")
+	outgoingHeaders.Del("set-cookie")
+
+	// We need to remove any domain information set on the cookies
+	for _, cookie := range response.Cookies() {
+		cookie.Domain = ""
+
+		http.SetCookie(outgoing, cookie)
+	}
 
 	responseRewriters := make([]ResponseRewriter, 0, len(p.rewriters))
 
