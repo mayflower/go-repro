@@ -75,7 +75,7 @@ func (p *proxyServer) buildProxyRequest(incoming *http.Request) (outgoing *http.
 	}
 
 	// We save compression for later
-	outgoing.Header.Set("accept-encoding", "")
+	outgoing.Header.Del("accept-encoding")
 
 	return
 }
@@ -91,7 +91,7 @@ func (p *proxyServer) sendProxyResponse(request *http.Request, response *http.Re
 		}
 	}
 
-	outgoingHeaders.Set("content-length", "")
+	outgoingHeaders.Del("content-length")
 
 	responseRewriters := make([]ResponseRewriter, 0, len(p.rewriters))
 
