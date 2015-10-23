@@ -4,9 +4,16 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 
 	"github.com/davecgh/go-spew/spew"
 )
+
+type redirectCaughtError struct{}
+
+func (c redirectCaughtError) Error() string {
+	return "redirect caught"
+}
 
 type proxyServer struct {
 	local  string
@@ -29,6 +36,10 @@ func (p *proxyServer) ServeHTTP(outgoing http.ResponseWriter, incoming *http.Req
 
 	if err == nil {
 		response, err = p.client.Do(proxyRequest)
+
+		if isRedirectError(err) {
+			err = nil
+		}
 	}
 
 	if err != nil {
@@ -38,8 +49,19 @@ func (p *proxyServer) ServeHTTP(outgoing http.ResponseWriter, incoming *http.Req
 	}
 }
 
+func isRedirectError(err error) (q bool) {
+	urlError, q := err.(*url.Error)
+	if !q {
+		return
+	}
+
+	_, q = urlError.Err.(redirectCaughtError)
+
+	return
+}
+
 func (p *proxyServer) buildProxyRequest(incoming *http.Request) (outgoing *http.Request, err error) {
-	outgoing, err = http.NewRequest(incoming.Method, p.remote+"/"+incoming.RequestURI, incoming.Body)
+	outgoing, err = http.NewRequest(incoming.Method, p.remote+incoming.RequestURI, incoming.Body)
 
 	for key, values := range incoming.Header {
 		key = http.CanonicalHeaderKey(key)
@@ -89,12 +111,20 @@ func newProxyServer(m Mapping, log io.Writer) (p *proxyServer, err error) {
 		log:    log,
 	}
 
+	if p.remote[len(p.remote)-1] == '/' {
+		p.remote = p.remote[:len(p.remote)-1]
+	}
+
 	p.server = http.Server{
 		Addr:    p.local,
 		Handler: p,
 	}
 
-	p.client = http.Client{}
+	p.client = http.Client{
+		CheckRedirect: func(req *http.Request, via []*http.Request) error {
+			return redirectCaughtError{}
+		},
+	}
 
 	return
 }
