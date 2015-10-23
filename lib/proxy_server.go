@@ -16,9 +16,10 @@ func (c redirectCaughtError) Error() string {
 }
 
 type proxyServer struct {
-	local  string
-	remote string
-	log    io.Writer
+	local     string
+	remote    string
+	log       io.Writer
+	rewriters []Rewriter
 
 	server http.Server
 	client http.Client
@@ -85,6 +86,12 @@ func (p *proxyServer) proxyResponse(response *http.Response, outgoing http.Respo
 		}
 	}
 
+	for _, rewriter := range p.rewriters {
+		if r, ok := rewriter.(HeaderRewriter); ok {
+			r.Rewrite(outgoingHeaders)
+		}
+	}
+
 	outgoing.WriteHeader(response.StatusCode)
 
 	io.Copy(outgoing, response.Body)
@@ -104,15 +111,16 @@ func (p *proxyServer) Start() <-chan error {
 	return c
 }
 
+func (p *proxyServer) AddRewriter(r Rewriter) {
+	p.rewriters = append(p.rewriters, r)
+}
+
 func newProxyServer(m Mapping, log io.Writer) (p *proxyServer, err error) {
 	p = &proxyServer{
-		local:  m.local,
-		remote: m.remote,
-		log:    log,
-	}
-
-	if p.remote[len(p.remote)-1] == '/' {
-		p.remote = p.remote[:len(p.remote)-1]
+		local:     m.local,
+		remote:    m.remote,
+		log:       log,
+		rewriters: make([]Rewriter, 0),
 	}
 
 	p.server = http.Server{

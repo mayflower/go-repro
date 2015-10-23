@@ -14,6 +14,10 @@ type Mapping struct {
 func newMapping(local, remote string) (m Mapping, err error) {
 	u, err := url.Parse(remote)
 
+	if remote[len(remote)-1] == '/' {
+		remote = remote[:len(remote)-1]
+	}
+
 	if u.Scheme == "" {
 		err = errors.New(fmt.Sprintf("%s: missing scheme", remote))
 	} else if u.Scheme != "http" && u.Scheme != "https" {

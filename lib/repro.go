@@ -28,6 +28,8 @@ func NewRepro(cfg Config) (r *Repro, err error) {
 		log: cfg.log,
 	}
 
+	locationRewriter := newLocationRewriter(cfg.mappings)
+
 	for _, m := range cfg.mappings {
 		proxyServer, e := newProxyServer(m, r.log)
 
@@ -35,6 +37,8 @@ func NewRepro(cfg Config) (r *Repro, err error) {
 			err = e
 			return
 		}
+
+		proxyServer.AddRewriter(locationRewriter)
 
 		r.proxies = append(r.proxies, proxyServer)
 	}
