@@ -65,8 +65,6 @@ func (p *proxyServer) buildProxyRequest(incoming *http.Request) (outgoing *http.
 	outgoing, err = http.NewRequest(incoming.Method, p.remote+incoming.RequestURI, incoming.Body)
 
 	for key, values := range incoming.Header {
-		key = http.CanonicalHeaderKey(key)
-
 		for _, value := range values {
 			outgoing.Header.Add(key, value)
 		}
@@ -79,8 +77,6 @@ func (p *proxyServer) proxyResponse(response *http.Response, outgoing http.Respo
 	outgoingHeaders := outgoing.Header()
 
 	for key, values := range response.Header {
-		key = http.CanonicalHeaderKey(key)
-
 		for _, value := range values {
 			outgoingHeaders.Add(key, value)
 		}
