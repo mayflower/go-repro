@@ -36,6 +36,11 @@ func init() {
 func (p *proxyServer) ServeHTTP(outgoing http.ResponseWriter, incoming *http.Request) {
 	var err error
 
+	hostMappings := buildHostMappings(p.mappings, incoming.Host)
+	for _, rewriter := range p.rewriters {
+		rewriter.SetMappings(hostMappings)
+	}
+
 	proxyRequest, err := p.buildProxyRequest(incoming)
 	var response *http.Response
 
@@ -78,6 +83,12 @@ func (p *proxyServer) buildProxyRequest(incoming *http.Request) (outgoing *http.
 	// We save compression for later
 	outgoing.Header.Del("accept-encoding")
 
+	for _, rewriter := range p.rewriters {
+		if rewriter, ok := rewriter.(IncomingHeaderRewriter); ok {
+			rewriter.RewriteIncomingHeaders(outgoing.Header)
+		}
+	}
+
 	return
 }
 
@@ -102,12 +113,9 @@ func (p *proxyServer) sendProxyResponse(request *http.Request, response *http.Re
 		http.SetCookie(outgoing, cookie)
 	}
 
-	hostMappings := buildHostMappings(p.mappings, request.Host)
 	responseRewriters := make([]ResponseRewriter, 0, len(p.rewriters))
 
 	for _, rewriter := range p.rewriters {
-		rewriter.SetMappings(hostMappings)
-
 		if r, ok := rewriter.(ResponseRewriter); ok {
 			if r.Matches(request, response) {
 				responseRewriters = append(responseRewriters, r)
