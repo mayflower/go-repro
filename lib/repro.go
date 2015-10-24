@@ -28,12 +28,12 @@ func NewRepro(cfg Config) (r *Repro, err error) {
 		log: cfg.log,
 	}
 
-	locationRewriter := NewLocationRewriter(cfg.mappings)
-	responseRewriter := NewGenericResponseRewriter(cfg.mappings, cfg.rewriteRoutes)
-	JsonRewriter := NewJsonRewriter(cfg.mappings, cfg.rewriteRoutes)
+	locationRewriter := NewLocationRewriter()
+	responseRewriter := NewGenericResponseRewriter(cfg.rewriteRoutes)
+	JsonRewriter := NewJsonRewriter(cfg.rewriteRoutes)
 
 	for _, m := range cfg.mappings {
-		proxyServer, e := newProxyServer(m, r.log)
+		proxyServer, e := newProxyServer(m, cfg.mappings, r.log)
 
 		if e != nil {
 			err = e

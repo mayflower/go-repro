@@ -6,7 +6,7 @@ import (
 )
 
 type LocationRewriter struct {
-	mappings []Mapping
+	mappings []hostMapping
 }
 
 func (l *LocationRewriter) RewriteHeaders(headers http.Header) {
@@ -14,7 +14,7 @@ func (l *LocationRewriter) RewriteHeaders(headers http.Header) {
 		for _, mapping := range l.mappings {
 			if strings.Contains(location, mapping.remote) {
 				location = strings.Replace(
-					location, mapping.remote, "http://"+mapping.local, -1)
+					location, mapping.remote, mapping.local, -1)
 			}
 		}
 
@@ -22,8 +22,10 @@ func (l *LocationRewriter) RewriteHeaders(headers http.Header) {
 	}
 }
 
-func NewLocationRewriter(mappings []Mapping) *LocationRewriter {
-	return &LocationRewriter{
-		mappings: mappings,
-	}
+func (l *LocationRewriter) SetMappings(mappings []hostMapping) {
+	l.mappings = mappings
+}
+
+func NewLocationRewriter() *LocationRewriter {
+	return &LocationRewriter{}
 }

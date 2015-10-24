@@ -8,8 +8,12 @@ import (
 )
 
 type JsonRewriter struct {
-	mappings      []Mapping
+	mappings      []hostMapping
 	rewriteRoutes []*regexp.Regexp
+}
+
+func (r *JsonRewriter) SetMappings(mappings []hostMapping) {
+	r.mappings = mappings
 }
 
 func (r *JsonRewriter) Matches(request *http.Request, response *http.Response) bool {
@@ -27,8 +31,6 @@ func (r *JsonRewriter) Matches(request *http.Request, response *http.Response) b
 }
 
 func (r *JsonRewriter) RewriteResponse(response []byte) []byte {
-	_ = "breakpoint"
-
 	var err error
 
 	stack := make([]interface{}, 0, 50)
@@ -92,15 +94,14 @@ func (r *JsonRewriter) RewriteResponse(response []byte) []byte {
 
 func (r *JsonRewriter) stringReplace(in string) string {
 	for _, mapping := range r.mappings {
-		in = strings.Replace(in, mapping.remote, "http://"+mapping.local, -1)
+		in = strings.Replace(in, mapping.remote, mapping.local, -1)
 	}
 
 	return in
 }
 
-func NewJsonRewriter(mappings []Mapping, rewriteRoutes []*regexp.Regexp) *JsonRewriter {
+func NewJsonRewriter(rewriteRoutes []*regexp.Regexp) *JsonRewriter {
 	return &JsonRewriter{
-		mappings:      mappings,
 		rewriteRoutes: rewriteRoutes,
 	}
 }

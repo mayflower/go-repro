@@ -7,8 +7,12 @@ import (
 )
 
 type GenericResponseRewriter struct {
-	mappings      []Mapping
+	mappings      []hostMapping
 	rewriteRoutes []*regexp.Regexp
+}
+
+func (r *GenericResponseRewriter) SetMappings(mappings []hostMapping) {
+	r.mappings = mappings
 }
 
 func (r *GenericResponseRewriter) Matches(request *http.Request, response *http.Response) bool {
@@ -29,16 +33,15 @@ func (r *GenericResponseRewriter) RewriteResponse(response []byte) []byte {
 	for _, mapping := range r.mappings {
 		if bytes.Contains(response, []byte(mapping.remote)) {
 			response = bytes.Replace(
-				response, []byte(mapping.remote), []byte("http://"+mapping.local), -1)
+				response, []byte(mapping.remote), []byte(mapping.local), -1)
 		}
 	}
 
 	return response
 }
 
-func NewGenericResponseRewriter(mappings []Mapping, rewriteRoutes []*regexp.Regexp) *GenericResponseRewriter {
+func NewGenericResponseRewriter(rewriteRoutes []*regexp.Regexp) *GenericResponseRewriter {
 	return &GenericResponseRewriter{
-		mappings:      mappings,
 		rewriteRoutes: rewriteRoutes,
 	}
 }

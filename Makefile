@@ -1,6 +1,6 @@
 GO ?= go
 GO_BUILDFLAGS = -v
-GO_TESTFLAGS = -cover
+GO_TESTFLAGS = -cover -v
 
 GO_BUILDDIR = ./build
 GO_SRCDIRS = cli lib

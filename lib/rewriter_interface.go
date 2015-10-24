@@ -14,4 +14,5 @@ type ResponseRewriter interface {
 }
 
 type Rewriter interface {
+	SetMappings(mappings []hostMapping)
 }

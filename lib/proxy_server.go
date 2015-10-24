@@ -23,6 +23,7 @@ type proxyServer struct {
 	remote    string
 	log       io.Writer
 	rewriters []Rewriter
+	mappings  []Mapping
 
 	server http.Server
 	client http.Client
@@ -101,9 +102,12 @@ func (p *proxyServer) sendProxyResponse(request *http.Request, response *http.Re
 		http.SetCookie(outgoing, cookie)
 	}
 
+	hostMappings := buildHostMappings(p.mappings, request.Host)
 	responseRewriters := make([]ResponseRewriter, 0, len(p.rewriters))
 
 	for _, rewriter := range p.rewriters {
+		rewriter.SetMappings(hostMappings)
+
 		if r, ok := rewriter.(ResponseRewriter); ok {
 			if r.Matches(request, response) {
 				responseRewriters = append(responseRewriters, r)
@@ -150,12 +154,13 @@ func (p *proxyServer) AddRewriter(r Rewriter) {
 	p.rewriters = append(p.rewriters, r)
 }
 
-func newProxyServer(m Mapping, log io.Writer) (p *proxyServer, err error) {
+func newProxyServer(m Mapping, mappings []Mapping, log io.Writer) (p *proxyServer, err error) {
 	p = &proxyServer{
 		local:     m.local,
 		remote:    m.remote,
 		log:       log,
 		rewriters: make([]Rewriter, 0),
+		mappings:  mappings,
 	}
 
 	p.server = http.Server{
