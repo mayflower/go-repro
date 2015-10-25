@@ -2,12 +2,14 @@ package lib
 
 import (
 	"bytes"
+	"compress/gzip"
 	"crypto/tls"
 	"fmt"
 	"io"
 	"io/ioutil"
 	"net/http"
 	"net/url"
+	"strings"
 
 	"github.com/davecgh/go-spew/spew"
 )
@@ -80,14 +82,14 @@ func (p *proxyServer) buildProxyRequest(incoming *http.Request) (outgoing *http.
 		}
 	}
 
-	// We save compression for later
-	outgoing.Header.Del("accept-encoding")
-
 	for _, rewriter := range p.rewriters {
 		if rewriter, ok := rewriter.(IncomingHeaderRewriter); ok {
 			rewriter.RewriteIncomingHeaders(outgoing.Header)
 		}
 	}
+
+	// We also try to compress upstream communication
+	outgoing.Header.Set("accept-encoding", "gzip")
 
 	return
 }
@@ -95,24 +97,26 @@ func (p *proxyServer) buildProxyRequest(incoming *http.Request) (outgoing *http.
 func (p *proxyServer) sendProxyResponse(request *http.Request, response *http.Response, outgoing http.ResponseWriter) {
 	defer response.Body.Close()
 
+	// Transfer headers
 	outgoingHeaders := outgoing.Header()
-
 	for key, values := range response.Header {
 		for _, value := range values {
 			outgoingHeaders.Add(key, value)
 		}
 	}
 
+	// Content length will be recalculated as content may be rewritten
 	outgoingHeaders.Del("content-length")
-	outgoingHeaders.Del("set-cookie")
 
 	// We need to remove any domain information set on the cookies
+	outgoingHeaders.Del("set-cookie")
 	for _, cookie := range response.Cookies() {
 		cookie.Domain = ""
 
 		http.SetCookie(outgoing, cookie)
 	}
 
+	// First rewrite pass: identify matching content rewriters and process headers
 	responseRewriters := make([]ResponseRewriter, 0, len(p.rewriters))
 
 	for _, rewriter := range p.rewriters {
@@ -127,10 +131,33 @@ func (p *proxyServer) sendProxyResponse(request *http.Request, response *http.Re
 		}
 	}
 
+	// Handle compression
+	bodyWriter := outgoing.(io.Writer)
+	bodyReader := response.Body.(io.Reader)
+
+	if response.Header.Get("content-encoding") == "gzip" {
+		var err error
+		bodyReader, err = gzip.NewReader(bodyReader)
+		if err != nil {
+			http.Error(outgoing, err.Error(), http.StatusBadGateway)
+			return
+		}
+
+		// We are ignoring any q-value here, so this is wrong for the case q=0
+		if strings.Contains(request.Header.Get("accept-encoding"), "gzip") {
+			bodyWriter = gzip.NewWriter(bodyWriter)
+			outgoingHeaders.Set("content-encoding", "gzip")
+		} else {
+			outgoingHeaders.Del("content-encoding")
+		}
+	}
+
+	// Send headers
 	outgoing.WriteHeader(response.StatusCode)
 
+	// If there are any body rewriters, we read the response into memory and process it
 	if len(responseRewriters) > 0 {
-		bodyData, err := ioutil.ReadAll(response.Body)
+		bodyData, err := ioutil.ReadAll(bodyReader)
 
 		if err == nil {
 			for _, rewriter := range responseRewriters {
@@ -140,9 +167,15 @@ func (p *proxyServer) sendProxyResponse(request *http.Request, response *http.Re
 			bodyData = make([]byte, 0)
 		}
 
-		io.Copy(outgoing, bytes.NewBuffer(bodyData))
-	} else {
-		io.Copy(outgoing, response.Body)
+		bodyReader = bytes.NewBuffer(bodyData)
+	}
+
+	// Send body
+	io.Copy(bodyWriter, bodyReader)
+
+	// Close writer if applicable (looking at you, gzip)
+	if bodyWriter, ok := bodyWriter.(io.Closer); ok {
+		bodyWriter.Close()
 	}
 }
 
@@ -188,7 +221,9 @@ func newProxyServer(m Mapping, mappings []Mapping, log io.Writer, sslAllowInsecu
 			return redirectCaughtError{}
 		},
 		Transport: &http.Transport{
-			TLSClientConfig: tlsConfig,
+			// We rather handle compression ourselves
+			DisableCompression: true,
+			TLSClientConfig:    tlsConfig,
 		},
 	}
 
