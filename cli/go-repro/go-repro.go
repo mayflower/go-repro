@@ -12,9 +12,11 @@ import (
 
 func parseCommandline() (cfg lib.Config, err error) {
 	var mappingDefs, rewriteDefs string
+	var sslAllowInsecure bool
 
-	flag.StringVar(&mappingDefs, "m", "", "mapping definitions, format: local=remote,[local=remote,...]")
-	flag.StringVar(&rewriteDefs, "r", "", "comma-separated list of regexes indetifying routes whose response will be rewritten")
+	flag.StringVar(&mappingDefs, "mappings", "", "mapping definitions, format: local=remote,[local=remote,...]")
+	flag.StringVar(&rewriteDefs, "rewrite", "", "comma-separated list of regexes indetifying routes whose response will be rewritten")
+	flag.BoolVar(&sslAllowInsecure, "allow-insecure", false, "accept insecure upstream connections")
 
 	flag.Usage = func() {
 		fmt.Fprint(os.Stdout, "usage: go-repro [options]\n\n")
@@ -24,6 +26,7 @@ func parseCommandline() (cfg lib.Config, err error) {
 	flag.Parse()
 
 	cfg = lib.NewConfig()
+	cfg.SetSSLAllowInsecure(sslAllowInsecure)
 
 	err = addMappings(mappingDefs, &cfg)
 

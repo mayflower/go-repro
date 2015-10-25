@@ -162,7 +162,7 @@ func (p *proxyServer) AddRewriter(r Rewriter) {
 	p.rewriters = append(p.rewriters, r)
 }
 
-func newProxyServer(m Mapping, mappings []Mapping, log io.Writer) (p *proxyServer, err error) {
+func newProxyServer(m Mapping, mappings []Mapping, log io.Writer, sslAllowInsecure bool) (p *proxyServer, err error) {
 	p = &proxyServer{
 		local:     m.local,
 		remote:    m.remote,
@@ -176,17 +176,20 @@ func newProxyServer(m Mapping, mappings []Mapping, log io.Writer) (p *proxyServe
 		Handler: p,
 	}
 
-	transport := &http.Transport{
-		TLSClientConfig: &tls.Config{
+	var tlsConfig *tls.Config
+	if sslAllowInsecure {
+		tlsConfig = &tls.Config{
 			InsecureSkipVerify: true,
-		},
+		}
 	}
 
 	p.client = http.Client{
 		CheckRedirect: func(req *http.Request, via []*http.Request) error {
 			return redirectCaughtError{}
 		},
-		Transport: transport,
+		Transport: &http.Transport{
+			TLSClientConfig: tlsConfig,
+		},
 	}
 
 	return

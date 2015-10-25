@@ -7,9 +7,10 @@ import (
 )
 
 type Config struct {
-	mappings      []Mapping
-	rewriteRoutes []*regexp.Regexp
-	log           io.Writer
+	mappings         []Mapping
+	rewriteRoutes    []*regexp.Regexp
+	log              io.Writer
+	sslAllowInsecure bool
 }
 
 func NewConfig() Config {
@@ -44,4 +45,8 @@ func (c *Config) SetLog(log io.Writer) {
 
 func (c *Config) CountMappings() int {
 	return len(c.mappings)
+}
+
+func (c *Config) SetSSLAllowInsecure(flag bool) {
+	c.sslAllowInsecure = flag
 }

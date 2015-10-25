@@ -29,7 +29,7 @@ func NewRepro(cfg Config) (r *Repro, err error) {
 	}
 
 	for _, m := range cfg.mappings {
-		proxyServer, e := newProxyServer(m, cfg.mappings, r.log)
+		proxyServer, e := newProxyServer(m, cfg.mappings, r.log, cfg.sslAllowInsecure)
 
 		if e != nil {
 			err = e
