@@ -10,8 +10,6 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
-
-	"github.com/davecgh/go-spew/spew"
 )
 
 type redirectCaughtError struct{}
@@ -29,10 +27,6 @@ type proxyServer struct {
 
 	server http.Server
 	client http.Client
-}
-
-func init() {
-	_ = spew.UnsafeDisabled
 }
 
 func (p *proxyServer) ServeHTTP(outgoing http.ResponseWriter, incoming *http.Request) {
@@ -159,9 +153,6 @@ func (p *proxyServer) sendProxyResponse(request *http.Request, response *http.Re
 		}
 	}
 
-	// Send headers
-	outgoing.WriteHeader(response.StatusCode)
-
 	// If there are any body rewriters, we read the response into memory and process it
 	if len(responseRewriters) > 0 {
 		bodyData, err := ioutil.ReadAll(bodyReader)
@@ -176,6 +167,9 @@ func (p *proxyServer) sendProxyResponse(request *http.Request, response *http.Re
 
 		bodyReader = bytes.NewBuffer(bodyData)
 	}
+
+	// Send headers
+	outgoing.WriteHeader(response.StatusCode)
 
 	// Send body
 	io.Copy(bodyWriter, bodyReader)
