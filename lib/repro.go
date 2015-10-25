@@ -37,6 +37,7 @@ func NewRepro(cfg Config) (r *Repro, err error) {
 		}
 
 		proxyServer.AddRewriter(NewLocationRewriter())
+		proxyServer.AddRewriter(NewRefererRewriter())
 		proxyServer.AddRewriter(NewCorsRewriter())
 		proxyServer.AddRewriter(NewGenericResponseRewriter(cfg.rewriteRoutes))
 		proxyServer.AddRewriter(NewJsonRewriter(cfg.rewriteRoutes))
