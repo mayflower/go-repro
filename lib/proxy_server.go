@@ -108,6 +108,9 @@ func (p *proxyServer) sendProxyResponse(request *http.Request, response *http.Re
 	// Content length will be recalculated as content may be rewritten
 	outgoingHeaders.Del("content-length")
 
+	// Reset transfer-encoding
+	outgoingHeaders.Del("transfer-encoding")
+
 	// We need to remove any domain information set on the cookies
 	outgoingHeaders.Del("set-cookie")
 	for _, cookie := range response.Cookies() {
@@ -135,7 +138,12 @@ func (p *proxyServer) sendProxyResponse(request *http.Request, response *http.Re
 	bodyWriter := outgoing.(io.Writer)
 	bodyReader := response.Body.(io.Reader)
 
-	if response.Header.Get("content-encoding") == "gzip" {
+	// We are ignoring any q-value here, so this is wrong for the case q=0
+	clientAcceptsGzip := strings.Contains(request.Header.Get("accept-encoding"), "gzip")
+
+	if response.Header.Get("content-encoding") == "gzip" &&
+		(len(responseRewriters) > 0 || !clientAcceptsGzip) {
+
 		var err error
 		bodyReader, err = gzip.NewReader(bodyReader)
 		if err != nil {
@@ -143,8 +151,7 @@ func (p *proxyServer) sendProxyResponse(request *http.Request, response *http.Re
 			return
 		}
 
-		// We are ignoring any q-value here, so this is wrong for the case q=0
-		if strings.Contains(request.Header.Get("accept-encoding"), "gzip") {
+		if clientAcceptsGzip {
 			bodyWriter = gzip.NewWriter(bodyWriter)
 			outgoingHeaders.Set("content-encoding", "gzip")
 		} else {
