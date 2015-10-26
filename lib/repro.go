@@ -5,7 +5,7 @@ import (
 )
 
 type Repro struct {
-	proxies []*proxyServer
+	proxies []*ProxyServer
 	log     io.Writer
 }
 
@@ -13,7 +13,7 @@ func (r *Repro) Start() (err <-chan error) {
 	c := make(chan error, 1)
 
 	for _, p := range r.proxies {
-		go func(proxy *proxyServer) {
+		go func(proxy *ProxyServer) {
 			for err := range proxy.Start() {
 				c <- err
 			}
@@ -35,7 +35,7 @@ func NewRepro(cfg Config) (r *Repro, err error) {
 	jsonRewriter := NewJsonRewriter(cfg.rewriteRoutes)
 
 	for _, m := range cfg.mappings {
-		proxyServer, e := newProxyServer(m, cfg.mappings, r.log, cfg.sslAllowInsecure)
+		proxyServer, e := NewProxyServer(m, cfg.mappings, r.log, cfg.sslAllowInsecure)
 
 		if e != nil {
 			err = e
@@ -47,6 +47,8 @@ func NewRepro(cfg Config) (r *Repro, err error) {
 		proxyServer.AddRewriter(corsRewriter)
 		proxyServer.AddRewriter(genericResponseRewriter)
 		proxyServer.AddRewriter(jsonRewriter)
+
+		proxyServer.SetNoLogging(cfg.noLogging)
 
 		r.proxies = append(r.proxies, proxyServer)
 	}

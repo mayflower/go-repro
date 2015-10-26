@@ -2,15 +2,16 @@ package lib
 
 import (
 	"bytes"
-	"net/http"
 	"regexp"
 )
 
-type GenericResponseRewriter struct {
+type GenericBodyRewriter struct {
 	rewriteRoutes []*regexp.Regexp
 }
 
-func (r *GenericResponseRewriter) Matches(request *http.Request, response *http.Response) bool {
+func (r *GenericBodyRewriter) Matches(ctx RequestContext) bool {
+	request := ctx.IncomingRequest()
+
 	if request.Header.Get("content-type") == "application/json" {
 		return false
 	}
@@ -24,19 +25,27 @@ func (r *GenericResponseRewriter) Matches(request *http.Request, response *http.
 	return false
 }
 
-func (*GenericResponseRewriter) RewriteResponse(response []byte, mappings []HostMapping) []byte {
-	for _, mapping := range mappings {
+func (*GenericBodyRewriter) RewriteResponse(response []byte, ctx RequestContext) []byte {
+	rewritten := false
+
+	for _, mapping := range ctx.HostMappings() {
 		if bytes.Contains(response, []byte(mapping.remote)) {
 			response = bytes.Replace(
 				response, []byte(mapping.remote), []byte(mapping.local), -1)
+
+			rewritten = true
 		}
+	}
+
+	if rewritten {
+		ctx.Log("generic body rewriter: body rewritten")
 	}
 
 	return response
 }
 
-func NewGenericResponseRewriter(rewriteRoutes []*regexp.Regexp) *GenericResponseRewriter {
-	return &GenericResponseRewriter{
+func NewGenericResponseRewriter(rewriteRoutes []*regexp.Regexp) *GenericBodyRewriter {
+	return &GenericBodyRewriter{
 		rewriteRoutes: rewriteRoutes,
 	}
 }

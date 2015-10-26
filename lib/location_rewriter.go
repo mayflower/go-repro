@@ -8,9 +8,10 @@ type LocationRewriter struct {
 	GenericHeaderRewriter
 }
 
-func (l *LocationRewriter) RewriteHeaders(headers http.Header, mappings []HostMapping) {
-	l.GenericHeaderRewriter.RewriteSpecifiedHeaders(
-		[]string{"location"}, headers, mappings)
+func (l *LocationRewriter) RewriteHeaders(headers http.Header, ctx RequestContext) {
+	if l.GenericHeaderRewriter.RewriteSpecifiedHeaders([]string{"location"}, headers, ctx) {
+		ctx.Log("rewrote location")
+	}
 }
 
 func NewLocationRewriter() *LocationRewriter {

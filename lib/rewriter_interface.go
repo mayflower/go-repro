@@ -4,17 +4,24 @@ import (
 	"net/http"
 )
 
+type RequestContext interface {
+	IncomingRequest() *http.Request
+	UpstreamResponse() *http.Response
+	HostMappings() []HostMapping
+	Log(message string)
+}
+
 type HeaderRewriter interface {
-	RewriteHeaders(headers http.Header, mappings []HostMapping)
+	RewriteHeaders(headers http.Header, ctx RequestContext)
 }
 
 type IncomingHeaderRewriter interface {
-	RewriteIncomingHeaders(headers http.Header, mappings []HostMapping)
+	RewriteIncomingHeaders(headers http.Header, ctx RequestContext)
 }
 
-type ResponseRewriter interface {
-	RewriteResponse(response []byte, mappings []HostMapping) []byte
-	Matches(*http.Request, *http.Response) bool
+type BodyRewriter interface {
+	RewriteResponse(response []byte, ctx RequestContext) []byte
+	Matches(ctx RequestContext) bool
 }
 
 type Rewriter interface{}

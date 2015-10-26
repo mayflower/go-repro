@@ -8,9 +8,10 @@ type RefererRewriter struct {
 	GenericHeaderRewriter
 }
 
-func (r *RefererRewriter) RewriteIncomingHeaders(headers http.Header, mappings []HostMapping) {
-	r.GenericHeaderRewriter.RewriteSpecifiedIncomingHeaders(
-		[]string{"referer"}, headers, mappings)
+func (r *RefererRewriter) RewriteIncomingHeaders(headers http.Header, ctx RequestContext) {
+	if r.GenericHeaderRewriter.RewriteSpecifiedIncomingHeaders([]string{"referer"}, headers, ctx) {
+		ctx.Log("rewrote referer")
+	}
 }
 
 func NewRefererRewriter() *RefererRewriter {

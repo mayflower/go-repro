@@ -2,7 +2,6 @@ package lib
 
 import (
 	"encoding/json"
-	"net/http"
 	"regexp"
 	"strings"
 )
@@ -11,7 +10,10 @@ type JsonRewriter struct {
 	rewriteRoutes []*regexp.Regexp
 }
 
-func (r *JsonRewriter) Matches(request *http.Request, response *http.Response) bool {
+func (r *JsonRewriter) Matches(ctx RequestContext) bool {
+	request := ctx.IncomingRequest()
+	response := ctx.UpstreamResponse()
+
 	if response.Header.Get("content-type") != "application/json" {
 		return false
 	}
@@ -25,8 +27,10 @@ func (r *JsonRewriter) Matches(request *http.Request, response *http.Response) b
 	return false
 }
 
-func (r *JsonRewriter) RewriteResponse(response []byte, mappings []HostMapping) []byte {
+func (r *JsonRewriter) RewriteResponse(response []byte, ctx RequestContext) []byte {
 	var err error
+
+	rewritten := false
 
 	stack := make([]interface{}, 0, 50)
 
@@ -37,7 +41,7 @@ func (r *JsonRewriter) RewriteResponse(response []byte, mappings []HostMapping) 
 	}
 
 	if responseString, ok := unmarshalledResponse.(string); ok {
-		unmarshalledResponse = r.stringReplace(responseString, mappings)
+		unmarshalledResponse = r.stringReplace(responseString, ctx, &rewritten)
 	} else {
 		stack = append(stack, unmarshalledResponse)
 	}
@@ -51,7 +55,7 @@ func (r *JsonRewriter) RewriteResponse(response []byte, mappings []HostMapping) 
 			for i, value := range elt {
 				switch value := value.(type) {
 				case string:
-					elt[i] = r.stringReplace(value, mappings)
+					elt[i] = r.stringReplace(value, ctx, &rewritten)
 
 				case []interface{}:
 					stack = append(stack, value)
@@ -65,7 +69,7 @@ func (r *JsonRewriter) RewriteResponse(response []byte, mappings []HostMapping) 
 			for key, value := range elt {
 				switch value := value.(type) {
 				case string:
-					elt[key] = r.stringReplace(value, mappings)
+					elt[key] = r.stringReplace(value, ctx, &rewritten)
 
 				case []interface{}:
 					stack = append(stack, value)
@@ -83,13 +87,21 @@ func (r *JsonRewriter) RewriteResponse(response []byte, mappings []HostMapping) 
 	if err != nil {
 		return response
 	} else {
+		ctx.Log("json rewriter: processed")
+		if rewritten {
+			ctx.Log("json rewriter: response rewritten")
+		}
+
 		return filteredResponse
 	}
 }
 
-func (*JsonRewriter) stringReplace(in string, mappings []HostMapping) string {
-	for _, mapping := range mappings {
-		in = strings.Replace(in, mapping.remote, mapping.local, -1)
+func (*JsonRewriter) stringReplace(in string, ctx RequestContext, rewritten *bool) string {
+	for _, mapping := range ctx.HostMappings() {
+		if strings.Contains(in, mapping.remote) {
+			in = strings.Replace(in, mapping.remote, mapping.local, -1)
+			*rewritten = true
+		}
 	}
 
 	return in

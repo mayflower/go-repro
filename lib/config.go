@@ -11,6 +11,7 @@ type Config struct {
 	rewriteRoutes    []*regexp.Regexp
 	log              io.Writer
 	sslAllowInsecure bool
+	noLogging        bool
 }
 
 func NewConfig() Config {
@@ -49,4 +50,8 @@ func (c *Config) CountMappings() int {
 
 func (c *Config) SetSSLAllowInsecure(flag bool) {
 	c.sslAllowInsecure = flag
+}
+
+func (c *Config) SetNoLogging(flag bool) {
+	c.noLogging = flag
 }

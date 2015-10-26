@@ -14,31 +14,63 @@ import (
 
 type redirectCaughtError struct{}
 
-func (c redirectCaughtError) Error() string {
-	return "redirect caught"
-}
-
-type proxyServer struct {
+type ProxyServer struct {
 	local     string
 	remote    string
 	log       io.Writer
 	rewriters []Rewriter
 	mappings  []Mapping
+	noLogging bool
 
 	server http.Server
 	client http.Client
 }
 
-func (p *proxyServer) ServeHTTP(outgoing http.ResponseWriter, incoming *http.Request) {
+type requestContext struct {
+	incomingRequest  *http.Request
+	upstreamResponse *http.Response
+	hostMappings     []HostMapping
+	outgoingHeaders  http.Header
+	logs             []string
+}
+
+func (c redirectCaughtError) Error() string {
+	return "redirect caught"
+}
+
+func (r *requestContext) IncomingRequest() *http.Request {
+	return r.incomingRequest
+}
+
+func (r *requestContext) UpstreamResponse() *http.Response {
+	return r.upstreamResponse
+}
+
+func (r *requestContext) HostMappings() []HostMapping {
+	return r.hostMappings
+}
+
+func (r *requestContext) Log(message string) {
+	r.logs = append(r.logs, message)
+}
+
+func newRequestContext() *requestContext {
+	return &requestContext{
+		logs: make([]string, 0, 10),
+	}
+}
+
+func (p *ProxyServer) ServeHTTP(outgoing http.ResponseWriter, incoming *http.Request) {
 	var err error
 
-	hostMappings := buildHostMappings(p.mappings, incoming.Host)
+	ctx := newRequestContext()
+	ctx.hostMappings = buildHostMappings(p.mappings, incoming.Host)
+	ctx.incomingRequest = incoming
 
-	upstreamRequest, err := p.buildUpstreamRequest(incoming, hostMappings)
-	var response *http.Response
+	upstreamRequest, err := p.buildUpstreamRequest(ctx)
 
 	if err == nil {
-		response, err = p.client.Do(upstreamRequest)
+		ctx.upstreamResponse, err = p.client.Do(upstreamRequest)
 
 		if isRedirectError(err) {
 			err = nil
@@ -49,7 +81,7 @@ func (p *proxyServer) ServeHTTP(outgoing http.ResponseWriter, incoming *http.Req
 		fmt.Fprintf(p.log, "error during proxy request: %v\n", err)
 		http.Error(outgoing, err.Error(), http.StatusBadGateway)
 	} else {
-		p.sendResponse(incoming, response, outgoing, hostMappings)
+		p.sendResponse(outgoing, ctx)
 	}
 }
 
@@ -64,10 +96,13 @@ func isRedirectError(err error) (q bool) {
 	return
 }
 
-func (p *proxyServer) buildUpstreamRequest(incoming *http.Request, mappings []HostMapping) (outgoing *http.Request, err error) {
-	outgoing, err = http.NewRequest(incoming.Method, p.remote+incoming.RequestURI, incoming.Body)
+func (p *ProxyServer) buildUpstreamRequest(ctx *requestContext) (outgoing *http.Request, err error) {
+	outgoing, err = http.NewRequest(
+		ctx.incomingRequest.Method,
+		p.remote+ctx.incomingRequest.RequestURI,
+		ctx.incomingRequest.Body)
 
-	for key, values := range incoming.Header {
+	for key, values := range ctx.incomingRequest.Header {
 		for _, value := range values {
 			outgoing.Header.Add(key, value)
 		}
@@ -75,7 +110,7 @@ func (p *proxyServer) buildUpstreamRequest(incoming *http.Request, mappings []Ho
 
 	for _, rewriter := range p.rewriters {
 		if rewriter, ok := rewriter.(IncomingHeaderRewriter); ok {
-			rewriter.RewriteIncomingHeaders(outgoing.Header, mappings)
+			rewriter.RewriteIncomingHeaders(outgoing.Header, ctx)
 		}
 	}
 
@@ -85,12 +120,48 @@ func (p *proxyServer) buildUpstreamRequest(incoming *http.Request, mappings []Ho
 	return
 }
 
-func (p *proxyServer) sendResponse(request *http.Request, response *http.Response, outgoing http.ResponseWriter, mappings []HostMapping) {
-	defer response.Body.Close()
+func (p *ProxyServer) sendResponse(outgoing http.ResponseWriter, ctx *requestContext) {
+	var err error
 
+	defer ctx.upstreamResponse.Body.Close()
+
+	ctx.outgoingHeaders = p.setupOutgoingHeaders(outgoing, ctx)
+
+	bodyRewriters := p.rewriteOutgoingHeaders(ctx)
+	rewriteBody := len(bodyRewriters) > 0
+
+	bodyReader, bodyWriter, err :=
+		p.handleCompression(ctx.upstreamResponse.Body, outgoing, rewriteBody, ctx)
+	if err != nil {
+		http.Error(outgoing, err.Error(), http.StatusBadGateway)
+		return
+	}
+
+	if rewriteBody {
+		bodyReader = p.rewriteBody(bodyReader, bodyRewriters, ctx)
+	}
+
+	// Add the log
+	if !p.noLogging {
+		p.addLog(ctx)
+	}
+
+	// Send headers
+	outgoing.WriteHeader(ctx.upstreamResponse.StatusCode)
+
+	// Send body
+	io.Copy(bodyWriter, bodyReader)
+
+	// Close writer if applicable (looking at you, gzip)
+	if bodyWriter, ok := bodyWriter.(io.Closer); ok {
+		bodyWriter.Close()
+	}
+}
+
+func (p *ProxyServer) setupOutgoingHeaders(outgoing http.ResponseWriter, ctx *requestContext) (outgoingHeaders http.Header) {
 	// Transfer headers
-	outgoingHeaders := outgoing.Header()
-	for key, values := range response.Header {
+	outgoingHeaders = outgoing.Header()
+	for key, values := range ctx.upstreamResponse.Header {
 		for _, value := range values {
 			outgoingHeaders.Add(key, value)
 		}
@@ -104,80 +175,83 @@ func (p *proxyServer) sendResponse(request *http.Request, response *http.Respons
 
 	// We need to remove any domain information set on the cookies
 	outgoingHeaders.Del("set-cookie")
-	for _, cookie := range response.Cookies() {
+	for _, cookie := range ctx.upstreamResponse.Cookies() {
 		cookie.Domain = ""
 
 		http.SetCookie(outgoing, cookie)
 	}
 
+	return
+}
+
+func (p *ProxyServer) rewriteOutgoingHeaders(ctx *requestContext) (bodyRewriters []BodyRewriter) {
 	// First rewrite pass: identify matching content rewriters and process headers
-	responseRewriters := make([]ResponseRewriter, 0, len(p.rewriters))
+	bodyRewriters = make([]BodyRewriter, 0, len(p.rewriters))
 
 	for _, rewriter := range p.rewriters {
-		if r, ok := rewriter.(ResponseRewriter); ok {
-			if r.Matches(request, response) {
-				responseRewriters = append(responseRewriters, r)
+		if r, ok := rewriter.(BodyRewriter); ok {
+			if r.Matches(ctx) {
+				bodyRewriters = append(bodyRewriters, r)
 			}
 		}
 
 		if r, ok := rewriter.(HeaderRewriter); ok {
-			r.RewriteHeaders(outgoingHeaders, mappings)
+			r.RewriteHeaders(ctx.outgoingHeaders, ctx)
 		}
 	}
 
-	// Handle compression
-	bodyWriter := outgoing.(io.Writer)
-	bodyReader := response.Body.(io.Reader)
+	return
+}
+
+func (p *ProxyServer) handleCompression(readerIn io.Reader, writerIn io.Writer, rewriteResponse bool, ctx *requestContext) (
+	readerOut io.Reader, writerOut io.Writer, err error) {
+
+	readerOut = readerIn
+	writerOut = writerIn
 
 	// We are ignoring any q-value here, so this is wrong for the case q=0
-	clientAcceptsGzip := strings.Contains(request.Header.Get("accept-encoding"), "gzip")
+	clientAcceptsGzip := strings.Contains(ctx.incomingRequest.Header.Get("accept-encoding"), "gzip")
 
-	if response.Header.Get("content-encoding") == "gzip" &&
-		(len(responseRewriters) > 0 || !clientAcceptsGzip) {
+	if ctx.upstreamResponse.Header.Get("content-encoding") == "gzip" &&
+		(rewriteResponse || !clientAcceptsGzip) {
 
-		var err error
-		bodyReader, err = gzip.NewReader(bodyReader)
+		readerOut, err = gzip.NewReader(readerIn)
 		if err != nil {
-			http.Error(outgoing, err.Error(), http.StatusBadGateway)
 			return
 		}
 
 		if clientAcceptsGzip {
-			bodyWriter = gzip.NewWriter(bodyWriter)
-			outgoingHeaders.Set("content-encoding", "gzip")
+			writerOut = gzip.NewWriter(writerIn)
+			ctx.outgoingHeaders.Set("content-encoding", "gzip")
 		} else {
-			outgoingHeaders.Del("content-encoding")
+			ctx.outgoingHeaders.Del("content-encoding")
 		}
 	}
 
-	// If there are any body rewriters, we read the response into memory and process it
-	if len(responseRewriters) > 0 {
-		bodyData, err := ioutil.ReadAll(bodyReader)
+	return
+}
 
-		if err == nil {
-			for _, rewriter := range responseRewriters {
-				bodyData = rewriter.RewriteResponse(bodyData, mappings)
-			}
-		} else {
-			bodyData = make([]byte, 0)
+func (p *ProxyServer) rewriteBody(reader io.Reader, bodyRewriters []BodyRewriter, ctx *requestContext) io.Reader {
+	bodyData, err := ioutil.ReadAll(reader)
+
+	if err == nil {
+		for _, rewriter := range bodyRewriters {
+			bodyData = rewriter.RewriteResponse(bodyData, ctx)
 		}
-
-		bodyReader = bytes.NewBuffer(bodyData)
+	} else {
+		bodyData = make([]byte, 0)
 	}
 
-	// Send headers
-	outgoing.WriteHeader(response.StatusCode)
+	return bytes.NewBuffer(bodyData)
+}
 
-	// Send body
-	io.Copy(bodyWriter, bodyReader)
-
-	// Close writer if applicable (looking at you, gzip)
-	if bodyWriter, ok := bodyWriter.(io.Closer); ok {
-		bodyWriter.Close()
+func (p *ProxyServer) addLog(ctx *requestContext) {
+	for _, entry := range ctx.logs {
+		ctx.outgoingHeaders.Add("x-go-repro-log", entry)
 	}
 }
 
-func (p *proxyServer) Start() <-chan error {
+func (p *ProxyServer) Start() <-chan error {
 	c := make(chan error, 1)
 
 	go func() {
@@ -189,12 +263,16 @@ func (p *proxyServer) Start() <-chan error {
 	return c
 }
 
-func (p *proxyServer) AddRewriter(r Rewriter) {
+func (p *ProxyServer) AddRewriter(r Rewriter) {
 	p.rewriters = append(p.rewriters, r)
 }
 
-func newProxyServer(m Mapping, mappings []Mapping, log io.Writer, sslAllowInsecure bool) (p *proxyServer, err error) {
-	p = &proxyServer{
+func (p *ProxyServer) SetNoLogging(flag bool) {
+	p.noLogging = flag
+}
+
+func NewProxyServer(m Mapping, mappings []Mapping, log io.Writer, sslAllowInsecure bool) (p *ProxyServer, err error) {
+	p = &ProxyServer{
 		local:     m.local,
 		remote:    m.remote,
 		log:       log,
