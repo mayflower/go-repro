@@ -33,15 +33,12 @@ func (p *proxyServer) ServeHTTP(outgoing http.ResponseWriter, incoming *http.Req
 	var err error
 
 	hostMappings := buildHostMappings(p.mappings, incoming.Host)
-	for _, rewriter := range p.rewriters {
-		rewriter.SetMappings(hostMappings)
-	}
 
-	proxyRequest, err := p.buildProxyRequest(incoming)
+	upstreamRequest, err := p.buildUpstreamRequest(incoming, hostMappings)
 	var response *http.Response
 
 	if err == nil {
-		response, err = p.client.Do(proxyRequest)
+		response, err = p.client.Do(upstreamRequest)
 
 		if isRedirectError(err) {
 			err = nil
@@ -52,7 +49,7 @@ func (p *proxyServer) ServeHTTP(outgoing http.ResponseWriter, incoming *http.Req
 		fmt.Fprintf(p.log, "error during proxy request: %v\n", err)
 		http.Error(outgoing, err.Error(), http.StatusBadGateway)
 	} else {
-		p.sendProxyResponse(incoming, response, outgoing)
+		p.sendResponse(incoming, response, outgoing, hostMappings)
 	}
 }
 
@@ -67,7 +64,7 @@ func isRedirectError(err error) (q bool) {
 	return
 }
 
-func (p *proxyServer) buildProxyRequest(incoming *http.Request) (outgoing *http.Request, err error) {
+func (p *proxyServer) buildUpstreamRequest(incoming *http.Request, mappings []HostMapping) (outgoing *http.Request, err error) {
 	outgoing, err = http.NewRequest(incoming.Method, p.remote+incoming.RequestURI, incoming.Body)
 
 	for key, values := range incoming.Header {
@@ -78,7 +75,7 @@ func (p *proxyServer) buildProxyRequest(incoming *http.Request) (outgoing *http.
 
 	for _, rewriter := range p.rewriters {
 		if rewriter, ok := rewriter.(IncomingHeaderRewriter); ok {
-			rewriter.RewriteIncomingHeaders(outgoing.Header)
+			rewriter.RewriteIncomingHeaders(outgoing.Header, mappings)
 		}
 	}
 
@@ -88,7 +85,7 @@ func (p *proxyServer) buildProxyRequest(incoming *http.Request) (outgoing *http.
 	return
 }
 
-func (p *proxyServer) sendProxyResponse(request *http.Request, response *http.Response, outgoing http.ResponseWriter) {
+func (p *proxyServer) sendResponse(request *http.Request, response *http.Response, outgoing http.ResponseWriter, mappings []HostMapping) {
 	defer response.Body.Close()
 
 	// Transfer headers
@@ -124,7 +121,7 @@ func (p *proxyServer) sendProxyResponse(request *http.Request, response *http.Re
 		}
 
 		if r, ok := rewriter.(HeaderRewriter); ok {
-			r.RewriteHeaders(outgoingHeaders)
+			r.RewriteHeaders(outgoingHeaders, mappings)
 		}
 	}
 
@@ -159,7 +156,7 @@ func (p *proxyServer) sendProxyResponse(request *http.Request, response *http.Re
 
 		if err == nil {
 			for _, rewriter := range responseRewriters {
-				bodyData = rewriter.RewriteResponse(bodyData)
+				bodyData = rewriter.RewriteResponse(bodyData, mappings)
 			}
 		} else {
 			bodyData = make([]byte, 0)

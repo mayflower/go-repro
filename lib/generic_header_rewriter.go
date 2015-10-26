@@ -5,15 +5,13 @@ import (
 	"strings"
 )
 
-type GenericHeaderRewriter struct {
-	mappings []hostMapping
-}
+type GenericHeaderRewriter struct{}
 
-func (h *GenericHeaderRewriter) RewriteSpecifiedHeaders(keys []string, headers http.Header) {
+func (*GenericHeaderRewriter) RewriteSpecifiedHeaders(keys []string, headers http.Header, mappings []HostMapping) {
 	for _, key := range keys {
 
 		if value := headers.Get(key); value != "" {
-			for _, mapping := range h.mappings {
+			for _, mapping := range mappings {
 				if strings.Contains(value, mapping.remote) {
 					value = strings.Replace(
 						value, mapping.remote, mapping.local, -1)
@@ -25,11 +23,11 @@ func (h *GenericHeaderRewriter) RewriteSpecifiedHeaders(keys []string, headers h
 	}
 }
 
-func (h *GenericHeaderRewriter) RewriteSpecifiedIncomingHeaders(keys []string, headers http.Header) {
+func (*GenericHeaderRewriter) RewriteSpecifiedIncomingHeaders(keys []string, headers http.Header, mappings []HostMapping) {
 	for _, key := range keys {
 
 		if value := headers.Get(key); value != "" {
-			for _, mapping := range h.mappings {
+			for _, mapping := range mappings {
 				if strings.Contains(value, mapping.local) {
 					value = strings.Replace(
 						value, mapping.local, mapping.remote, -1)
@@ -39,8 +37,4 @@ func (h *GenericHeaderRewriter) RewriteSpecifiedIncomingHeaders(keys []string, h
 			headers.Set(key, value)
 		}
 	}
-}
-
-func (h *GenericHeaderRewriter) SetMappings(mappings []hostMapping) {
-	h.mappings = mappings
 }

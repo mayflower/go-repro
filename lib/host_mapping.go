@@ -5,18 +5,18 @@ import (
 	"strings"
 )
 
-type hostMapping struct {
+type HostMapping struct {
 	local  string
 	remote string
 }
 
-func buildHostMappings(mappings []Mapping, requestHostvar string) (hostMappings []hostMapping) {
-	hostMappings = make([]hostMapping, 0, len(mappings))
+func buildHostMappings(mappings []Mapping, requestHostvar string) (hostMappings []HostMapping) {
+	hostMappings = make([]HostMapping, 0, len(mappings))
 
 	requestHost, _, requestErr := splitHostPort(requestHostvar)
 
 	for _, mapping := range mappings {
-		h := hostMapping{
+		h := HostMapping{
 			remote: mapping.remote,
 		}
 

@@ -8,12 +8,7 @@ import (
 )
 
 type JsonRewriter struct {
-	mappings      []hostMapping
 	rewriteRoutes []*regexp.Regexp
-}
-
-func (r *JsonRewriter) SetMappings(mappings []hostMapping) {
-	r.mappings = mappings
 }
 
 func (r *JsonRewriter) Matches(request *http.Request, response *http.Response) bool {
@@ -30,7 +25,7 @@ func (r *JsonRewriter) Matches(request *http.Request, response *http.Response) b
 	return false
 }
 
-func (r *JsonRewriter) RewriteResponse(response []byte) []byte {
+func (r *JsonRewriter) RewriteResponse(response []byte, mappings []HostMapping) []byte {
 	var err error
 
 	stack := make([]interface{}, 0, 50)
@@ -42,7 +37,7 @@ func (r *JsonRewriter) RewriteResponse(response []byte) []byte {
 	}
 
 	if responseString, ok := unmarshalledResponse.(string); ok {
-		unmarshalledResponse = r.stringReplace(responseString)
+		unmarshalledResponse = r.stringReplace(responseString, mappings)
 	} else {
 		stack = append(stack, unmarshalledResponse)
 	}
@@ -56,7 +51,7 @@ func (r *JsonRewriter) RewriteResponse(response []byte) []byte {
 			for i, value := range elt {
 				switch value := value.(type) {
 				case string:
-					elt[i] = r.stringReplace(value)
+					elt[i] = r.stringReplace(value, mappings)
 
 				case []interface{}:
 					stack = append(stack, value)
@@ -70,7 +65,7 @@ func (r *JsonRewriter) RewriteResponse(response []byte) []byte {
 			for key, value := range elt {
 				switch value := value.(type) {
 				case string:
-					elt[key] = r.stringReplace(value)
+					elt[key] = r.stringReplace(value, mappings)
 
 				case []interface{}:
 					stack = append(stack, value)
@@ -92,8 +87,8 @@ func (r *JsonRewriter) RewriteResponse(response []byte) []byte {
 	}
 }
 
-func (r *JsonRewriter) stringReplace(in string) string {
-	for _, mapping := range r.mappings {
+func (*JsonRewriter) stringReplace(in string, mappings []HostMapping) string {
+	for _, mapping := range mappings {
 		in = strings.Replace(in, mapping.remote, mapping.local, -1)
 	}
 

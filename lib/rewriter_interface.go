@@ -5,18 +5,16 @@ import (
 )
 
 type HeaderRewriter interface {
-	RewriteHeaders(headers http.Header)
+	RewriteHeaders(headers http.Header, mappings []HostMapping)
 }
 
 type IncomingHeaderRewriter interface {
-	RewriteIncomingHeaders(headers http.Header)
+	RewriteIncomingHeaders(headers http.Header, mappings []HostMapping)
 }
 
 type ResponseRewriter interface {
-	RewriteResponse(response []byte) []byte
+	RewriteResponse(response []byte, mappings []HostMapping) []byte
 	Matches(*http.Request, *http.Response) bool
 }
 
-type Rewriter interface {
-	SetMappings(mappings []hostMapping)
-}
+type Rewriter interface{}
