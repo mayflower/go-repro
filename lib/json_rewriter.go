@@ -82,17 +82,16 @@ func (r *JsonRewriter) RewriteResponse(response []byte, ctx RequestContext) []by
 		}
 	}
 
-	filteredResponse, err := json.Marshal(unmarshalledResponse)
+	var filteredResponse []byte
+	if rewritten {
+		filteredResponse, err = json.Marshal(unmarshalledResponse)
+	}
 
-	if err != nil {
-		return response
-	} else {
-		ctx.Log("json rewriter: processed")
-		if rewritten {
-			ctx.Log("json rewriter: response rewritten")
-		}
-
+	if filteredResponse != nil && err == nil {
+		ctx.Log("json rewriter: response rewritten")
 		return filteredResponse
+	} else {
+		return response
 	}
 }
 

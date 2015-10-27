@@ -11,7 +11,7 @@ type Mapping struct {
 	remote string
 }
 
-func newMapping(local, remote string) (m Mapping, err error) {
+func NewMapping(local, remote string) (m Mapping, err error) {
 	if len(remote) > 0 && remote[len(remote)-1] == '/' {
 		remote = remote[:len(remote)-1]
 	}

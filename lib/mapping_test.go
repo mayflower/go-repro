@@ -5,7 +5,7 @@ import (
 )
 
 func TestInvalidRemote(t *testing.T) {
-	_, err := newMapping("0.0.0.0:8080", "foo.bar.com")
+	_, err := NewMapping("0.0.0.0:8080", "foo.bar.com")
 
 	if err == nil {
 		t.Fatal("missing scheme should be an error")
@@ -13,7 +13,7 @@ func TestInvalidRemote(t *testing.T) {
 }
 
 func TestInvalidScheme(t *testing.T) {
-	_, err := newMapping("0.0.0.0:8080", "foo://bar.com")
+	_, err := NewMapping("0.0.0.0:8080", "foo://bar.com")
 
 	if err == nil {
 		t.Fatal("invalid scheme should be an error")
@@ -21,7 +21,7 @@ func TestInvalidScheme(t *testing.T) {
 }
 
 func TestTrailingSlash(t *testing.T) {
-	m, err := newMapping("0.0.0.0:8080", "http://foo.bar.com/")
+	m, err := NewMapping("0.0.0.0:8080", "http://foo.bar.com/")
 
 	if err != nil {
 		t.Fatalf("instantiation failed: %v", err)
@@ -33,7 +33,7 @@ func TestTrailingSlash(t *testing.T) {
 }
 
 func TestNontrivialPath(t *testing.T) {
-	_, err := newMapping("0.0.0.0:8080", "http://foo.bar.com/baz")
+	_, err := NewMapping("0.0.0.0:8080", "http://foo.bar.com/baz")
 
 	if err == nil {
 		t.Fatal("nontrivial path should be an error")

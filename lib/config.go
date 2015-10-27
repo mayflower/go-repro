@@ -21,7 +21,7 @@ func NewConfig() Config {
 }
 
 func (c *Config) AddMapping(local, remote string) (err error) {
-	m, err := newMapping(local, remote)
+	m, err := NewMapping(local, remote)
 
 	if err == nil {
 		c.mappings = append(c.mappings, m)
