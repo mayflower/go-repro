@@ -63,6 +63,8 @@ func newRequestContext() *requestContext {
 func (p *ProxyServer) ServeHTTP(outgoing http.ResponseWriter, incoming *http.Request) {
 	var err error
 
+	_ = "breakpoint"
+
 	ctx := newRequestContext()
 	ctx.hostMappings = buildHostMappings(p.mappings, incoming.Host)
 	ctx.incomingRequest = incoming
@@ -215,8 +217,12 @@ func (p *ProxyServer) handleCompression(readerIn io.Reader, writerIn io.Writer, 
 	if ctx.upstreamResponse.Header.Get("content-encoding") == "gzip" &&
 		(rewriteResponse || !clientAcceptsGzip) {
 
-		readerOut, err = gzip.NewReader(readerIn)
-		if err != nil {
+		var e error
+		readerOut, e = gzip.NewReader(readerIn)
+		if e != nil {
+			// Work around the closed-body-on-redirect bug in the runtime
+			// https://github.com/golang/go/issues/10069
+			readerOut = readerIn
 			return
 		}
 
@@ -239,6 +245,8 @@ func (p *ProxyServer) rewriteBody(reader io.Reader, bodyRewriters []BodyRewriter
 			bodyData = rewriter.RewriteResponse(bodyData, ctx)
 		}
 	} else {
+		// Work around the closed-body-on-redirect bug in the runtime
+		// https://github.com/golang/go/issues/10069
 		bodyData = make([]byte, 0)
 	}
 
