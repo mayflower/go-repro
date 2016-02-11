@@ -9,6 +9,7 @@ import (
 	"io/ioutil"
 	"net/http"
 	"net/url"
+	"strconv"
 	"strings"
 )
 
@@ -27,11 +28,13 @@ type ProxyServer struct {
 }
 
 type requestContext struct {
-	incomingRequest  *http.Request
-	upstreamResponse *http.Response
-	hostMappings     []HostMapping
-	outgoingHeaders  http.Header
-	logs             []string
+	incomingRequest       *http.Request
+	upstreamResponse      *http.Response
+	hostMappings          []HostMapping
+	outgoingHeaders       http.Header
+	logs                  []string
+	contentLength         int
+	suppressContentLength bool
 }
 
 func (c redirectCaughtError) Error() string {
@@ -56,7 +59,8 @@ func (r *requestContext) Log(message string) {
 
 func newRequestContext() *requestContext {
 	return &requestContext{
-		logs: make([]string, 0, 10),
+		logs:          make([]string, 0, 10),
+		contentLength: -1,
 	}
 }
 
@@ -145,6 +149,8 @@ func (p *ProxyServer) sendResponse(outgoing http.ResponseWriter, ctx *requestCon
 		bodyReader = p.rewriteBody(bodyReader, bodyRewriters, ctx)
 	}
 
+	p.setupContentLength(ctx)
+
 	// Add the log
 	if !p.noLogging {
 		p.addLog(ctx)
@@ -169,6 +175,10 @@ func (p *ProxyServer) setupOutgoingHeaders(outgoing http.ResponseWriter, ctx *re
 		for _, value := range values {
 			outgoingHeaders.Add(key, value)
 		}
+	}
+
+	if contentLength, e := strconv.Atoi(ctx.upstreamResponse.Header.Get("content-length")); e == nil {
+		ctx.contentLength = contentLength
 	}
 
 	// Content length will be recalculated as content may be rewritten
@@ -230,6 +240,7 @@ func (p *ProxyServer) handleCompression(readerIn io.Reader, writerIn io.Writer, 
 
 		if clientAcceptsGzip {
 			writerOut = gzip.NewWriter(writerIn)
+			ctx.suppressContentLength = true
 			ctx.outgoingHeaders.Set("content-encoding", "gzip")
 		} else {
 			ctx.outgoingHeaders.Del("content-encoding")
@@ -252,12 +263,20 @@ func (p *ProxyServer) rewriteBody(reader io.Reader, bodyRewriters []BodyRewriter
 		bodyData = make([]byte, 0)
 	}
 
+	ctx.contentLength = len(bodyData)
+
 	return bytes.NewBuffer(bodyData)
 }
 
 func (p *ProxyServer) addLog(ctx *requestContext) {
 	for _, entry := range ctx.logs {
 		ctx.outgoingHeaders.Add("x-go-repro-log", entry)
+	}
+}
+
+func (p *ProxyServer) setupContentLength(ctx *requestContext) {
+	if ctx.contentLength > 0 && !ctx.suppressContentLength {
+		ctx.outgoingHeaders.Set("content-length", strconv.Itoa(ctx.contentLength))
 	}
 }
 
