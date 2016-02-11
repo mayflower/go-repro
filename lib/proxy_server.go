@@ -63,8 +63,6 @@ func newRequestContext() *requestContext {
 func (p *ProxyServer) ServeHTTP(outgoing http.ResponseWriter, incoming *http.Request) {
 	var err error
 
-	_ = "breakpoint"
-
 	ctx := newRequestContext()
 	ctx.hostMappings = buildHostMappings(p.mappings, incoming.Host)
 	ctx.incomingRequest = incoming
@@ -103,6 +101,10 @@ func (p *ProxyServer) buildUpstreamRequest(ctx *requestContext) (outgoing *http.
 		ctx.incomingRequest.Method,
 		p.remote+ctx.incomingRequest.RequestURI,
 		ctx.incomingRequest.Body)
+
+	if err != nil {
+		return
+	}
 
 	for key, values := range ctx.incomingRequest.Header {
 		for _, value := range values {
