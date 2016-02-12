@@ -35,6 +35,7 @@ type requestContext struct {
 	logs                  []string
 	contentLength         int
 	suppressContentLength bool
+	requestUrl            string
 }
 
 func (c redirectCaughtError) Error() string {
@@ -55,6 +56,14 @@ func (r *requestContext) HostMappings() []HostMapping {
 
 func (r *requestContext) Log(message string) {
 	r.logs = append(r.logs, message)
+}
+
+func (r *requestContext) RequestUrl() string {
+	if r.requestUrl == "" {
+		r.requestUrl = "http://" + r.incomingRequest.Host + r.incomingRequest.RequestURI
+	}
+
+	return r.requestUrl
 }
 
 func newRequestContext() *requestContext {

@@ -8,7 +8,7 @@ GO_PACKAGE_PREFIX = github.com/mayflower/go-repro
 GO_PACKAGES = \
 	cli/go-repro \
 	lib
-GO_DEPENDENCIES =
+GO_DEPENDENCIES = gopkg.in/yaml.v2
 
 GO_DEBUG_MAIN = github.com/mayflower/go-repro/cli/go-repro
 GO_DEBUG_BINARY = ./go-repro-debug

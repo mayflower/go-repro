@@ -15,12 +15,14 @@ func parseCommandline() (cfg lib.Config, err error) {
 		mappingDefs, rewriteDefs string
 		sslAllowInsecure         bool
 		noLogging                bool
+		configFile               string
 	)
 
 	flag.StringVar(&mappingDefs, "mappings", "", "mapping definitions, format: local=remote,[local=remote,...]")
 	flag.StringVar(&rewriteDefs, "rewrite", "", "comma-separated list of regexes indetifying routes whose response will be rewritten")
 	flag.BoolVar(&sslAllowInsecure, "allow-insecure", false, "accept insecure upstream connections")
 	flag.BoolVar(&noLogging, "no-logging", false, "disable logging via x-go-repro-log headers")
+	flag.StringVar(&configFile, "config", "", "read YAML config from file (all other options are ignored)")
 
 	flag.Usage = func() {
 		fmt.Fprint(os.Stdout, "usage: go-repro [options]\n\n")
@@ -29,14 +31,24 @@ func parseCommandline() (cfg lib.Config, err error) {
 
 	flag.Parse()
 
-	cfg = lib.NewConfig()
-	cfg.SetSSLAllowInsecure(sslAllowInsecure)
-	cfg.SetNoLogging(noLogging)
+	if configFile != "" {
+		var yamlConfig YamlConfig
 
-	err = addMappings(mappingDefs, &cfg)
+		yamlConfig, err = UnmarshalYamlConfigFile(configFile)
 
-	if err == nil {
-		err = addRewrites(rewriteDefs, &cfg)
+		if err == nil {
+			cfg, err = yamlConfig.createReproConfig()
+		}
+	} else {
+		cfg = lib.NewConfig()
+		cfg.SetSSLAllowInsecure(sslAllowInsecure)
+		cfg.SetNoLogging(noLogging)
+
+		err = addMappings(mappingDefs, &cfg)
+
+		if err == nil {
+			err = addRewrites(rewriteDefs, &cfg)
+		}
 	}
 
 	return

@@ -17,7 +17,7 @@ func (r *GenericBodyRewriter) Matches(ctx RequestContext) bool {
 	}
 
 	for _, route := range r.rewriteRoutes {
-		if route.MatchString(request.RequestURI) {
+		if route.MatchString(ctx.RequestUrl()) {
 			return true
 		}
 	}

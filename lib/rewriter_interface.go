@@ -7,6 +7,7 @@ import (
 type RequestContext interface {
 	IncomingRequest() *http.Request
 	UpstreamResponse() *http.Response
+	RequestUrl() string
 	HostMappings() []HostMapping
 	Log(message string)
 }
