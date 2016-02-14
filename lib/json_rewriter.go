@@ -67,9 +67,24 @@ func (r *JsonRewriter) RewriteResponse(response []byte, ctx RequestContext) []by
 
 		case map[string]interface{}:
 			for key, value := range elt {
+
+				rewriteKey := false
+				newKey := r.stringReplace(key, ctx, &rewriteKey)
+
+				if _, ok := elt[newKey]; ok {
+					rewriteKey = false
+				}
+
+				if rewriteKey {
+					delete(elt, key)
+					elt[newKey] = value
+				}
+
+				rewritten = rewritten || rewriteKey
+
 				switch value := value.(type) {
 				case string:
-					elt[key] = r.stringReplace(value, ctx, &rewritten)
+					elt[newKey] = r.stringReplace(value, ctx, &rewritten)
 
 				case []interface{}:
 					stack = append(stack, value)
