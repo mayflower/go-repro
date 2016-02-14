@@ -1,0 +1,11 @@
+allow-insecure: false
+disable-logging: false
+mappings:
+  - local: 0.0.0.0:8888
+    remote: http://www.kernel.org
+  - local: 0.0.0.0:8889
+    remote: https://cdn.kernel.org
+  - local: 0.0.0.0:8887
+    remote: https://www.kernel.org
+rewrites:
+  - :(8887|8888)
