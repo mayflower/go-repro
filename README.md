@@ -14,7 +14,6 @@ device. `go-repro` presents a different solution for this problem by mapping the
 domains to public ports on the development machine that can be easily accessed from
 other devices without worrying about name resolution.
 
-
 Consider for example two vhosts `foo.bar.dev` and `huppe.hoppe.dev` that are
 configured on your development machine. If you want to test your application with
 the android emulator, you will have to mess with the hosts setup of the emulated
@@ -27,21 +26,58 @@ ports. Doing
  on all interfaces. If there are references to the hosts in requests and / or
  responses, `go-repro` will transparently rewrite these in order to account for the
  mapping. In the android emulator, you can access the web application via `10.0.2.2:8081`
- (which is mapped to the host loopback interface by the emulator).
+ (which is forwarded to the host listening on `127.0.0.1` by the emulator).
 
 *WARNING* `go-repro` is developed as a debugging tool for web application development.
 Do not try to use it in a production environment!
 
 # Installation
 
- In order to install `go-repro`, you need a working [go](https://golang.org/)
- installation. Doing
+Three ways lead to happiness.
 
-    go get github.com/mayflower/go-repro/cli/go-repro
+## Precompiled binaries
 
- will install the binary into your `GOPATH`.
+Just download precompiled binaries for your platform from
+[github](https://github.com/mayflower/go-repro/releases).
+
+## Go get
+
+Provided that you sport an installation of
+[golang](https://golang.org), the latest version from master
+can be installed via
+
+    go get -d github.com/mayflower/go-repro/...
+    go generate github.com/mayflower/go-repro/...
+    go install github.com/mayflower/go-repro/cli/...
+
+Isn't a simple `go get github.com/mayflower/go-repro/cli/...` sufficient, you ask?
+Indeed it is, but including the generate step detailed above will encode verbose version information
+in the binaries.
+
+## Git & Make
+
+Clone the repository and do `make`. This will create a separate `GOPATH` in `build`
+and leave you with the binaries ready in `build/bin`. Of course, you need
+[golang](https://golang.org)
+installed for this.
 
 # Usage
+
+## Configuration
+
+Take a look at the command line help
+
+    go-repro -h
+
+in order to get an overview over the available options.
+
+If you get tired of specifying
+a complex rewriting config on the command line, you can also supply your setup as
+a YAML file
+
+    go-repro -config my_config.yaml
+
+Please take a look at `example_config.yaml` if you want to go down this road.
 
 ## Host mappings
 
@@ -51,7 +87,7 @@ Do not try to use it in a production environment!
  identifies the associated upstream host, _including_ the protocol.
 
  The local IP `0.0.0.0` causes the proxy to listen on all interfaces and is replaced
- with the actual IP targeted by the request (as stored in the HTTP host) during
+ with the actual IP targeted by the request (as specified the HTTP host header) during
  request rewriting.
 
 ## Rewriting
@@ -60,8 +96,8 @@ Rewriting considers all configured mappings.
 
 ### Headers
 
- Headers are transparently translated for all requests handled by the proxy. In
- particular, the following headers are handled:
+ Headers are transparently translated for all requests handled by the proxy. The
+ following headers are handled:
 
   * `Location` for redirects
   * `Referer` for all requests
@@ -72,7 +108,7 @@ Rewriting considers all configured mappings.
  Only routes that match one of the regular expressions provided via the
  `-rewrite` option (a comma separated list of regexes) are considered for body
  rewriting. There are two rewriters, one of which performs plain text replacements
- of all occurences of the remote host (including the protocol!) within the response
+ of all occurrences of the remote host URL (including the protocol!) within the response
  body. The second rewriter handles responses of MIME type `application/json` by
  decoding the JSON and subsequently replacing all occurences of the remote host within
  the JSON structure.
@@ -93,7 +129,7 @@ compressed response.
 
 ## Logging
 
-All rewrite steps are logged as a series of `x-gopro-log` headers, e.g.
+All rewrite steps are logged as a series of `x-go-repro-log` headers, e.g.
 
     X-Go-Repro-Log:json rewriter: response rewritten
     X-Go-Repro-Log:rewrote access-control-allow-origin

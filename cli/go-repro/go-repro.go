@@ -15,6 +15,7 @@ func parseCommandline() (cfg lib.Config, err error) {
 		mappingDefs, rewriteDefs string
 		sslAllowInsecure         bool
 		noLogging                bool
+		showVersion              bool
 		configFile               string
 	)
 
@@ -23,6 +24,7 @@ func parseCommandline() (cfg lib.Config, err error) {
 	flag.BoolVar(&sslAllowInsecure, "allow-insecure", false, "accept insecure upstream connections")
 	flag.BoolVar(&noLogging, "no-logging", false, "disable logging via x-go-repro-log headers")
 	flag.StringVar(&configFile, "config", "", "read YAML config from file (all other options are ignored)")
+	flag.BoolVar(&showVersion, "version", false, "display version")
 
 	flag.Usage = func() {
 		fmt.Fprint(os.Stdout, "usage: go-repro [options]\n\n")
@@ -30,6 +32,11 @@ func parseCommandline() (cfg lib.Config, err error) {
 	}
 
 	flag.Parse()
+
+	if showVersion {
+		fmt.Printf("version: %s\n", lib.Version())
+		os.Exit(0)
+	}
 
 	if configFile != "" {
 		var yamlConfig YamlConfig
